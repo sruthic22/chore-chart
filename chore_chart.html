@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🏠 chore chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fdfcfb;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .app { max-width: 520px; margin: 0 auto; }
+
+    .header { text-align: center; margin-bottom: 2rem; }
+    .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 6px; letter-spacing: -0.3px; }
+    .header p { font-size: 14px; color: #888; }
+
+    .week-selector {
+      display: flex; gap: 8px; justify-content: center;
+      margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+
+    .week-btn {
+      padding: 7px 18px; border-radius: 999px; font-size: 13px; font-weight: 500;
+      border: 1.5px solid transparent; cursor: pointer; transition: all 0.15s;
+      background: transparent; font-family: inherit;
+    }
+    .week-btn:hover { transform: scale(1.04); }
+
+    .week-pink   { border-color: #f4a7be; color: #a63d62; background: #fff0f5; }
+    .week-blue   { border-color: #93c4f0; color: #1a5f99; background: #eef6ff; }
+    .week-green  { border-color: #8fd4a8; color: #1e7044; background: #edfaf3; }
+    .week-yellow { border-color: #f5d07a; color: #8a6200; background: #fffbea; }
+
+    .week-pink.active   { background: #f4a7be; color: #6b1f3e; border-color: #f4a7be; }
+    .week-blue.active   { background: #93c4f0; color: #0c3d6b; border-color: #93c4f0; }
+    .week-green.active  { background: #8fd4a8; color: #0d4826; border-color: #8fd4a8; }
+    .week-yellow.active { background: #f5d07a; color: #5c3f00; border-color: #f5d07a; }
+
+    .week-label {
+      text-align: center; font-size: 13px; font-weight: 500;
+      margin-bottom: 1.5rem; padding: 5px 16px; border-radius: 999px;
+      display: none; width: fit-content; margin-left: auto; margin-right: auto;
+    }
+
+    .cards { display: flex; flex-direction: column; gap: 10px; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #ebebeb;
+      border-radius: 16px;
+      padding: 1rem 1.25rem;
+      display: flex; align-items: center; gap: 14px;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .card:hover { transform: translateY(-1px); }
+    .card.done { opacity: 0.45; }
+
+    .avatar {
+      width: 42px; height: 42px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; flex-shrink: 0; letter-spacing: 0.3px;
+    }
+    .av-0 { background: #fde8f0; color: #a63d62; }
+    .av-1 { background: #daeeff; color: #1a5f99; }
+    .av-2 { background: #d6f5e3; color: #1e7044; }
+    .av-3 { background: #fef5d6; color: #8a6200; }
+
+    .card-info { flex: 1; }
+    .card-name { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 3px; }
+    .card-task { font-size: 13px; color: #777; line-height: 1.45; }
+
+    .check-btn {
+      width: 30px; height: 30px; border-radius: 50%;
+      border: 1.5px solid #ddd;
+      background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: all 0.15s; font-size: 15px; color: transparent;
+      font-family: inherit;
+    }
+    .check-btn:hover { border-color: #8fd4a8; background: #edfaf3; }
+    .card.done .check-btn { color: #1e7044; border-color: #8fd4a8; background: #d6f5e3; }
+
+    .progress-wrap { margin-top: 1.5rem; }
+    .progress-label { font-size: 12px; color: #aaa; margin-bottom: 7px; text-align: center; }
+    .progress-bg { background: #f0f0f0; border-radius: 999px; height: 5px; }
+    .progress-fill { height: 5px; border-radius: 999px; transition: width 0.35s ease; width: 0%; }
+    .done-msg { text-align: center; margin-top: 12px; font-size: 13px; color: #aaa; min-height: 20px; }
+
+    .placeholder {
+      text-align: center; color: #ccc; font-size: 13px;
+      padding: 2.5rem 0;
+    }
+    .placeholder span { font-size: 32px; display: block; margin-bottom: 10px; }
+
+    .sync-status {
+      text-align: center; font-size: 11px; color: #bbb;
+      margin-bottom: 1rem; min-height: 16px; transition: color 0.3s;
+    }
+    .sync-status.saving { color: #f5c26b; }
+    .sync-status.saved  { color: #8fd4a8; }
+    .sync-status.error  { color: #f4a7be; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>🏠 chore chart</h1>
+      <p>select this week's color to see who does what</p>
+    </div>
+
+    <div class="week-selector">
+      <button class="week-btn week-pink"   onclick="setWeek('pink')">🌸 pink</button>
+      <button class="week-btn week-blue"   onclick="setWeek('blue')">💙 blue</button>
+      <button class="week-btn week-green"  onclick="setWeek('green')">🌿 green</button>
+      <button class="week-btn week-yellow" onclick="setWeek('yellow')">🌼 yellow</button>
+    </div>
+
+    <div id="week-label" class="week-label"></div>
+    <div id="sync-status" class="sync-status"></div>
+
+    <div class="cards" id="cards">
+      <div class="placeholder">
+        <span>🗓️</span>
+        tap a color week above to get started
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="progress-wrap" style="display:none;">
+      <div class="progress-label" id="progress-label"></div>
+      <div class="progress-bg">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="done-msg" id="done-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── Supabase config ──────────────────────────────────────────────
+    const SUPABASE_URL = 'https://jqfmdctjiaujtlbsyqjc.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_fSt37fhSay93Qxr625FHxw_bttyPnPV';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // ────────────────────────────────────────────────────────────────
+
+    const names = ['Sruthi', 'Alanna', 'Emma', 'Jennifer'];
+    const tasks = [
+      'Take out trash & recycling',
+      'Clean kitchen counters, stove & floors',
+      'Clean all counter spaces (dining room, coffee tables, TV stand, etc.)',
+      'Vacuum & sweep apartment & stairs'
+    ];
+
+    const rotations = {
+      pink:   [0, 1, 2, 3],
+      blue:   [1, 2, 3, 0],
+      green:  [2, 3, 0, 1],
+      yellow: [3, 0, 1, 2]
+    };
+
+    const weekMeta = {
+      pink:   { label: '🌸 pink week',   bg: '#fde8f0', color: '#a63d62', bar: '#f4a7be' },
+      blue:   { label: '💙 blue week',   bg: '#daeeff', color: '#1a5f99', bar: '#93c4f0' },
+      green:  { label: '🌿 green week',  bg: '#d6f5e3', color: '#1e7044', bar: '#8fd4a8' },
+      yellow: { label: '🌼 yellow week', bg: '#fef5d6', color: '#8a6200', bar: '#f5d07a' }
+    };
+
+    let currentWeek = null;
+    let checked = {
+      pink:   [false, false, false, false],
+      blue:   [false, false, false, false],
+      green:  [false, false, false, false],
+      yellow: [false, false, false, false]
+    };
+    let realtimeChannel = null;
+
+    // ── Sync status indicator ────────────────────────────────────────
+    function setStatus(msg, cls) {
+      const el = document.getElementById('sync-status');
+      el.textContent = msg;
+      el.className = 'sync-status ' + (cls || '');
+    }
+
+    // ── Load state for a week from Supabase ──────────────────────────
+    async function loadWeek(week) {
+      setStatus('loading…');
+      const { data, error } = await supabase
+        .from('chore_state')
+        .select('checked')
+        .eq('week', week)
+        .maybeSingle();
+
+      if (error) {
+        setStatus('⚠️ could not load', 'error');
+        return;
+      }
+
+      if (data) {
+        checked[week] = data.checked;
+      } else {
+        // Row doesn't exist yet — create it
+        await supabase.from('chore_state').insert({ week, checked: [false, false, false, false] });
+        checked[week] = [false, false, false, false];
+      }
+
+      setStatus('');
+      renderCards();
+    }
+
+    // ── Save state for a week to Supabase ────────────────────────────
+    async function saveWeek(week) {
+      setStatus('saving…', 'saving');
+      const { error } = await supabase
+        .from('chore_state')
+        .upsert({ week, checked: checked[week] });
+
+      if (error) {
+        setStatus('⚠️ save failed', 'error');
+      } else {
+        setStatus('✓ saved', 'saved');
+        setTimeout(() => setStatus(''), 1500);
+      }
+    }
+
+    // ── Realtime subscription ────────────────────────────────────────
+    function subscribeToWeek(week) {
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+
+      realtimeChannel = supabase
+        .channel('chore_state_' + week)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'chore_state',
+          filter: `week=eq.${week}`
+        }, payload => {
+          if (payload.new && payload.new.checked) {
+            checked[week] = payload.new.checked;
+            renderCards();
+          }
+        })
+        .subscribe();
+    }
+
+    // ── Week selection ───────────────────────────────────────────────
+    async function setWeek(week) {
+      currentWeek = week;
+
+      document.querySelectorAll('.week-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('.week-' + week).classList.add('active');
+
+      const lbl = document.getElementById('week-label');
+      const meta = weekMeta[week];
+      lbl.style.display = 'block';
+      lbl.textContent = meta.label;
+      lbl.style.background = meta.bg;
+      lbl.style.color = meta.color;
+
+      subscribeToWeek(week);
+      await loadWeek(week);
+    }
+
+    // ── Render cards ─────────────────────────────────────────────────
+    function renderCards() {
+      const week = currentWeek;
+      const rot = rotations[week];
+      const ch = checked[week];
+      const container = document.getElementById('cards');
+
+      container.innerHTML = names.map((name, i) => {
+        const taskIdx = rot[i];
+        const done = ch[i];
+        return `
+          <div class="card ${done ? 'done' : ''}" id="card-${i}">
+            <div class="avatar av-${i}">${name.slice(0, 2)}</div>
+            <div class="card-info">
+              <div class="card-name">${name}</div>
+              <div class="card-task">${tasks[taskIdx]}</div>
+            </div>
+            <button class="check-btn" onclick="toggle(${i})" title="mark done">✓</button>
+          </div>`;
+      }).join('');
+
+      updateProgress();
+    }
+
+    // ── Toggle a chore ───────────────────────────────────────────────
+    async function toggle(i) {
+      checked[currentWeek][i] = !checked[currentWeek][i];
+      renderCards();
+      await saveWeek(currentWeek);
+    }
+
+    // ── Progress bar ─────────────────────────────────────────────────
+    function updateProgress() {
+      const ch = checked[currentWeek];
+      const done = ch.filter(Boolean).length;
+      const pct = Math.round((done / 4) * 100);
+      const bar = weekMeta[currentWeek].bar;
+
+      document.getElementById('progress-wrap').style.display = 'block';
+      document.getElementById('progress-label').textContent = `${done} of 4 chores done`;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-fill').style.background = bar;
+      document.getElementById('done-msg').textContent = done === 4 ? '🎉 all done! clean home, happy roommates ✨' : '';
+    }
+  </script>
+</body>
+</html>
